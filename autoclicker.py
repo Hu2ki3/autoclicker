@@ -22,6 +22,12 @@ class AutoclickerApp:
         self.max_delay_var = tk.DoubleVar(value=0.19)
         self.jitter_var = tk.IntVar(value=2)
 
+        # Kopien für den Klick-Thread: Der Thread liest nur diese
+        # Attribute, nie die Tk-Variablen (siehe _sync_settings).
+        self.min_delay = self.min_delay_var.get()
+        self.max_delay = self.max_delay_var.get()
+        self.jitter = self.jitter_var.get()
+
         # --- GUI Aufbau ---
         tk.Label(root, text="Autoclicker", font=("Arial", 14, "bold")).pack(pady=(10, 0))
 
@@ -35,17 +41,18 @@ class AutoclickerApp:
         tk.Label(root, text="Min. Verzögerung (Sek.):").pack(pady=(15, 0))
         tk.Scale(root, from_=0.03, to=2.0, resolution=0.01, orient="horizontal",
                  variable=self.min_delay_var, length=200,
-                 command=self._validate_delays).pack()
+                 command=self._sync_settings).pack()
 
         tk.Label(root, text="Max. Verzögerung (Sek.):").pack()
         tk.Scale(root, from_=0.03, to=2.0, resolution=0.01, orient="horizontal",
                  variable=self.max_delay_var, length=200,
-                 command=self._validate_delays).pack()
+                 command=self._sync_settings).pack()
 
         # Jitter-Regler
         tk.Label(root, text="Pixel-Jitter (0 = aus):").pack()
         tk.Scale(root, from_=0, to=5, resolution=1, orient="horizontal",
-                 variable=self.jitter_var, length=200).pack()
+                 variable=self.jitter_var, length=200,
+                 command=self._sync_settings).pack()
 
         # Hotkey-Info
         tk.Label(root, text="F9: Start/Stopp | F10: Beenden | F11: Reset Zähler",
@@ -60,17 +67,23 @@ class AutoclickerApp:
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
-    def _validate_delays(self, _=None):
-        """Verhindert dass Min > Max ist."""
+    def _sync_settings(self, _=None):
+        """Verhindert Min > Max und übernimmt die Werte für den Klick-Thread.
+
+        Läuft im Tk-Hauptthread (Scale-Callback).
+        """
         if self.min_delay_var.get() > self.max_delay_var.get():
             self.max_delay_var.set(self.min_delay_var.get())
+        self.min_delay = self.min_delay_var.get()
+        self.max_delay = self.max_delay_var.get()
+        self.jitter = self.jitter_var.get()
 
     def click_loop(self):
         """Der Klick-Thread mit Pixel-Jitter über xdotool."""
         mouse = Controller()
         while self.program_running:
             if self.clicking:
-                jitter = self.jitter_var.get()
+                jitter = self.jitter
 
                 if jitter > 0:
                     dx = random.randint(-jitter, jitter)
@@ -85,8 +98,8 @@ class AutoclickerApp:
                 self.click_count += 1
                 self.root.after(0, self._update_counter)
 
-                min_d = self.min_delay_var.get()
-                max_d = self.max_delay_var.get()
+                min_d = self.min_delay
+                max_d = self.max_delay
                 if min_d > max_d:
                     min_d = max_d
                 time.sleep(random.uniform(min_d, max_d))
